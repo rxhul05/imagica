@@ -74,7 +74,7 @@ export default function BagScreen() {
             </View>
 
             <View style={styles.itemContent}>
-                <Image source={item.image_url} style={styles.itemImage} resizeMode="contain" />
+                <Image source={typeof item.image_url === 'string' ? { uri: item.image_url } : item.image_url} style={styles.itemImage} resizeMode="contain" />
 
                 <View style={styles.itemDetails}>
                     <View style={styles.itemInfo}>

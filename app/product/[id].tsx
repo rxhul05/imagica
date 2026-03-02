@@ -1,14 +1,14 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { doc, getDoc } from 'firebase/firestore';
 import { CheckCircle, Heart, Share2, Star } from 'lucide-react-native';
-import { useState } from 'react';
-import { Alert, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Image, Modal, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { ZoomIn, ZoomOut } from 'react-native-reanimated';
 import { Colors } from '../../constants/Colors';
-import { useCartStore } from '../../store/cartStore';
-
 import { PRODUCTS } from '../../data/products';
-
-import { Share } from 'react-native';
+import { COLLECTIONS } from '../../lib/db';
+import { db } from '../../lib/firebase';
+import { useCartStore } from '../../store/cartStore';
 import { useThemeStore } from '../../store/themeStore';
 import { useWishlistStore } from '../../store/wishlistStore';
 
@@ -19,28 +19,75 @@ export default function ProductDetailsScreen() {
     const { mode } = useThemeStore();
     const isDarkMode = mode === 'dark';
     const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [product, setProduct] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
 
-    // Use selectors for better reactivity
     const wishlistItems = useWishlistStore((state) => state.items);
     const toggleWishlist = useWishlistStore((state) => state.toggleWishlist);
 
-    // In a real app, fetch product by ID
-    const product = PRODUCTS.find((p) => p.id === id);
+    useEffect(() => {
+        loadProduct();
+    }, [id]);
+
+    const loadProduct = async () => {
+        const idStr = String(id);
+
+        // Check if it's a Firestore product (prefixed with fb_)
+        if (idStr.startsWith('fb_')) {
+            const firestoreId = idStr.replace('fb_', '');
+            try {
+                const docSnap = await getDoc(doc(db, COLLECTIONS.PRODUCTS, firestoreId));
+                if (docSnap.exists()) {
+                    setProduct({
+                        id: idStr,
+                        ...docSnap.data(),
+                        isFirestore: true,
+                        reviews: docSnap.data().reviews || 0,
+                        tags: [],
+                    });
+                }
+            } catch (error) {
+                console.error('Error fetching product:', error);
+            }
+        } else {
+            // Static product from local data
+            const found = PRODUCTS.find((p) => p.id === idStr);
+            if (found) {
+                setProduct({ ...found, isFirestore: false, tags: [] });
+            }
+        }
+        setLoading(false);
+    };
+
+    if (loading) {
+        return (
+            <View style={[styles.container, styles.center, isDarkMode && styles.darkContainer]}>
+                <ActivityIndicator size="large" color={isDarkMode ? '#FFF' : Colors.primary} />
+            </View>
+        );
+    }
 
     if (!product) {
         return (
-            <View style={[styles.container, isDarkMode && styles.darkContainer]}>
-                <Text style={isDarkMode && styles.darkText}>Product not found</Text>
+            <View style={[styles.container, styles.center, isDarkMode && styles.darkContainer]}>
+                <Text style={[styles.notFoundText, isDarkMode && styles.darkText]}>Product not found</Text>
+                <TouchableOpacity style={styles.goBackBtn} onPress={() => router.back()}>
+                    <Text style={styles.goBackText}>Go Back</Text>
+                </TouchableOpacity>
             </View>
         );
     }
 
     const isLiked = wishlistItems.some((item) => item.id === product.id);
 
+    const imageSource = product.isFirestore
+        ? { uri: product.image_url }
+        : product.image_url;
+
     const handleShare = async () => {
         try {
             await Share.share({
-                message: `Check out this amazing product: ${product.name} by ${product.brand} for only $${product.price}!`,
+                message: `Check out this amazing product: ${product.name} by ${product.brand} for only ₹${product.price}!`,
             });
         } catch (error) {
             console.error(error);
@@ -52,23 +99,21 @@ export default function ProductDetailsScreen() {
             id: product.id,
             name: product.name,
             brand: product.brand,
-            category: 'Makeup',
+            category: product.category || 'Makeup',
             price: product.price,
             rating: product.rating,
             description: product.description,
-            image_url: product.image_url,
+            image_url: product.isFirestore ? product.image_url : product.image_url,
             tags: [],
         });
-        Alert.alert('Success', 'Added to bag!', [
-            { text: 'Continue Shopping', style: 'cancel' },
-            { text: 'View Bag', onPress: () => router.push('/(tabs)/bag') }
-        ]);
+        setShowSuccessModal(true);
+        setTimeout(() => setShowSuccessModal(false), 3000);
     };
 
     return (
         <View style={[styles.container, isDarkMode && styles.darkContainer]}>
             <ScrollView>
-                <Image source={product.image_url} style={styles.image} />
+                <Image source={imageSource} style={styles.image} resizeMode="cover" />
 
                 <View style={styles.content}>
                     <View style={styles.header}>
@@ -93,10 +138,16 @@ export default function ProductDetailsScreen() {
                     <View style={styles.ratingContainer}>
                         <Star size={16} color="#FFD700" fill="#FFD700" />
                         <Text style={[styles.rating, isDarkMode && styles.darkText]}>{product.rating}</Text>
-                        <Text style={[styles.reviews, isDarkMode && styles.darkTextLight]}>({product.reviews} reviews)</Text>
+                        <Text style={[styles.reviews, isDarkMode && styles.darkTextLight]}>({product.reviews || 0} reviews)</Text>
                     </View>
 
                     <Text style={[styles.price, isDarkMode && styles.darkText]}>₹{product.price}</Text>
+
+                    {product.category && (
+                        <View style={[styles.categoryBadge, isDarkMode && { backgroundColor: '#333' }]}>
+                            <Text style={[styles.categoryBadgeText, isDarkMode && { color: '#AAA' }]}>{product.category}</Text>
+                        </View>
+                    )}
 
                     <Text style={[styles.sectionTitle, isDarkMode && styles.darkText]}>Description</Text>
                     <Text style={[styles.description, isDarkMode && styles.darkTextLight]}>{product.description}</Text>
@@ -109,7 +160,7 @@ export default function ProductDetailsScreen() {
                 </TouchableOpacity>
             </View>
 
-            {/* Custom Success Modal */}
+            {/* Success Modal */}
             <Modal visible={showSuccessModal} transparent animationType="fade">
                 <View style={styles.modalOverlay}>
                     <Animated.View
@@ -154,6 +205,10 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: Colors.background,
     },
+    center: {
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     darkContainer: {
         backgroundColor: '#121212',
     },
@@ -175,6 +230,21 @@ const styles = StyleSheet.create({
     },
     darkButtonText: {
         color: '#000000',
+    },
+    notFoundText: {
+        fontSize: 18,
+        color: Colors.textLight,
+        marginBottom: 16,
+    },
+    goBackBtn: {
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        backgroundColor: Colors.primary,
+        borderRadius: 24,
+    },
+    goBackText: {
+        color: '#FFF',
+        fontWeight: '600',
     },
     image: {
         width: '100%',
@@ -229,7 +299,20 @@ const styles = StyleSheet.create({
         fontSize: 24,
         fontWeight: 'bold',
         color: Colors.primary,
-        marginBottom: 24,
+        marginBottom: 16,
+    },
+    categoryBadge: {
+        alignSelf: 'flex-start',
+        backgroundColor: '#F5F5F5',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+        marginBottom: 20,
+    },
+    categoryBadgeText: {
+        fontSize: 13,
+        color: '#666',
+        fontWeight: '500',
     },
     sectionTitle: {
         fontSize: 18,

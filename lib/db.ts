@@ -26,6 +26,7 @@ export const COLLECTIONS = {
     PAYMENTS: 'payments',
     PREFERENCES: 'preferences',
     WISHLIST: 'wishlist',
+    PRODUCTS: 'products',
 } as const;
 
 // ============================
@@ -240,3 +241,49 @@ export async function removeFromWishlist(uid: string, productId: string) {
     const deletePromises = snapshot.docs.map(d => deleteDoc(doc(db, COLLECTIONS.WISHLIST, d.id)));
     await Promise.all(deletePromises);
 }
+
+// ============================
+// Product Operations (Admin)
+// ============================
+
+export async function addProduct(data: {
+    name: string;
+    brand: string;
+    price: number;
+    category: string;
+    description: string;
+    image_url: string;
+    rating?: number;
+}) {
+    return await addDoc(collection(db, COLLECTIONS.PRODUCTS), {
+        ...data,
+        rating: data.rating || 4.5,
+        reviews: 0,
+        created_at: serverTimestamp(),
+    });
+}
+
+export async function getAllProducts() {
+    const q = query(
+        collection(db, COLLECTIONS.PRODUCTS),
+        orderBy('created_at', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function deleteProduct(id: string) {
+    await deleteDoc(doc(db, COLLECTIONS.PRODUCTS, id));
+}
+
+// ============================
+// Admin Role Management
+// ============================
+
+export async function toggleAdmin(uid: string, isAdmin: boolean): Promise<void> {
+    await updateDoc(doc(db, COLLECTIONS.USERS, uid), {
+        isAdmin,
+        updated_at: serverTimestamp(),
+    });
+}
+

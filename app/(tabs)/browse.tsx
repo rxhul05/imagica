@@ -1,14 +1,14 @@
 import { useRouter } from 'expo-router';
 import { MoreHorizontal, Search, XCircle } from 'lucide-react-native';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FlatList, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { PRODUCTS } from '../../data/products';
+import { getAllProducts } from '../../lib/db';
+import { useThemeStore } from '../../store/themeStore';
 
 const TABS = ['Top Results', 'Skincare', 'Makeup', 'Fragrance', 'Hair'];
-
-import { useThemeStore } from '../../store/themeStore';
 
 export default function BrowseScreen() {
     const router = useRouter();
@@ -16,21 +16,63 @@ export default function BrowseScreen() {
     const [activeTab, setActiveTab] = useState('Top Results');
     const { mode } = useThemeStore();
     const isDarkMode = mode === 'dark';
+    const [firestoreProducts, setFirestoreProducts] = useState<any[]>([]);
 
-    const filteredProducts = PRODUCTS.filter(p =>
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.brand.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    useEffect(() => {
+        fetchAdminProducts();
+    }, []);
+
+    const fetchAdminProducts = async () => {
+        try {
+            const products = await getAllProducts();
+            setFirestoreProducts(products);
+        } catch (error) {
+            console.error('Error fetching admin products:', error);
+        }
+    };
+
+    // Merge static products with admin-added Firestore products
+    const allProducts = [
+        ...PRODUCTS,
+        ...firestoreProducts.map(p => ({
+            id: `fb_${p.id}`,
+            name: p.name,
+            brand: p.brand,
+            price: p.price,
+            image_url: p.image_url, // URL string from admin
+            description: p.description,
+            rating: p.rating || 4.5,
+            reviews: p.reviews || 0,
+            category: p.category,
+            isFirestore: true, // flag to know it's a URL image
+        })),
+    ];
+
+    const filteredProducts = allProducts.filter(p => {
+        const matchesSearch = searchQuery === '' ||
+            p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            p.brand.toLowerCase().includes(searchQuery.toLowerCase());
+
+        const matchesTab = activeTab === 'Top Results' ||
+            p.category?.toLowerCase() === activeTab.toLowerCase();
+
+        return matchesSearch && matchesTab;
+    });
 
     const renderItem = ({ item }: { item: any }) => (
         <TouchableOpacity
             style={styles.listItem}
             onPress={() => router.push(`/product/${item.id}`)}
         >
-            <Image source={item.image_url} style={styles.itemImage} resizeMode="contain" />
+            <Image
+                source={item.isFirestore ? { uri: item.image_url } : item.image_url}
+                style={styles.itemImage}
+                resizeMode="contain"
+            />
             <View style={styles.itemContent}>
                 <Text style={[styles.itemTitle, isDarkMode && styles.darkText]}>{item.name}</Text>
                 <Text style={[styles.itemSubtitle, isDarkMode && styles.darkTextLight]}>{item.brand}</Text>
+                <Text style={[styles.itemPrice, isDarkMode && styles.darkText]}>₹{item.price}</Text>
             </View>
             <TouchableOpacity>
                 <MoreHorizontal size={20} color={isDarkMode ? '#FFF' : Colors.primary} />
@@ -57,7 +99,7 @@ export default function BrowseScreen() {
                         </TouchableOpacity>
                     )}
                 </View>
-                <TouchableOpacity>
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
                     <Text style={styles.cancelText}>Cancel</Text>
                 </TouchableOpacity>
             </View>
@@ -87,6 +129,13 @@ export default function BrowseScreen() {
                 </ScrollView>
             </View>
 
+            {/* Results Count */}
+            <View style={styles.resultsInfo}>
+                <Text style={[styles.resultsCount, isDarkMode && styles.darkTextLight]}>
+                    {filteredProducts.length} product{filteredProducts.length !== 1 ? 's' : ''} found
+                </Text>
+            </View>
+
             {/* Results List */}
             <FlatList
                 data={filteredProducts}
@@ -94,6 +143,12 @@ export default function BrowseScreen() {
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.list}
                 ItemSeparatorComponent={() => <View style={[styles.separator, isDarkMode && styles.darkSeparator]} />}
+                ListEmptyComponent={
+                    <View style={styles.emptyState}>
+                        <Search size={40} color={isDarkMode ? '#444' : '#CCC'} />
+                        <Text style={[styles.emptyText, isDarkMode && styles.darkTextLight]}>No products found</Text>
+                    </View>
+                }
             />
         </SafeAreaView>
     );
@@ -151,7 +206,7 @@ const styles = StyleSheet.create({
     },
     cancelText: {
         fontSize: 16,
-        color: '#007AFF', // iOS blue
+        color: '#007AFF',
     },
     tabsContainer: {
         borderBottomWidth: 1,
@@ -182,6 +237,14 @@ const styles = StyleSheet.create({
     activeTabText: {
         color: '#FFF',
     },
+    resultsInfo: {
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+    },
+    resultsCount: {
+        fontSize: 12,
+        color: '#999',
+    },
     list: {
         paddingHorizontal: 16,
     },
@@ -205,15 +268,31 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '500',
         color: '#000',
-        marginBottom: 4,
+        marginBottom: 2,
     },
     itemSubtitle: {
         fontSize: 14,
         color: '#666',
     },
+    itemPrice: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: Colors.primary,
+        marginTop: 2,
+    },
     separator: {
         height: 1,
         backgroundColor: '#E0E0E0',
-        marginLeft: 112, // Indent separator to match text start
+        marginLeft: 112,
+    },
+    emptyState: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 60,
+        gap: 12,
+    },
+    emptyText: {
+        fontSize: 15,
+        color: '#999',
     },
 });
