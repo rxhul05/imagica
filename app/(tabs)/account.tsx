@@ -71,7 +71,7 @@ export default function AccountScreen() {
                 </View>
 
                 {/* User Profile Card */}
-                <TouchableOpacity style={[styles.profileCard, isDarkMode && styles.darkBorder]} onPress={user ? undefined : handleSignIn}>
+                <TouchableOpacity style={[styles.profileCard, isDarkMode && styles.darkBorder]} onPress={user ? () => router.push('/account/profile') : handleSignIn}>
                     <View style={[styles.avatarContainer, isDarkMode && styles.darkAvatarContainer]}>
                         {user?.email ? (
                             <Text style={styles.avatarText}>{user.email.charAt(0).toUpperCase()}</Text>

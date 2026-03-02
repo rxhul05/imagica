@@ -8,6 +8,7 @@ import { Colors } from '../../constants/Colors';
 import { PRODUCTS } from '../../data/products';
 import { COLLECTIONS } from '../../lib/db';
 import { db } from '../../lib/firebase';
+import { useAuthStore } from '../../store/authStore';
 import { useCartStore } from '../../store/cartStore';
 import { useThemeStore } from '../../store/themeStore';
 import { useWishlistStore } from '../../store/wishlistStore';
@@ -16,6 +17,7 @@ export default function ProductDetailsScreen() {
     const { id } = useLocalSearchParams();
     const router = useRouter();
     const { addItem } = useCartStore();
+    const { user } = useAuthStore();
     const { mode } = useThemeStore();
     const isDarkMode = mode === 'dark';
     const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -122,7 +124,7 @@ export default function ProductDetailsScreen() {
                             <Text style={[styles.name, isDarkMode && styles.darkText]}>{product.name}</Text>
                         </View>
                         <View style={styles.actions}>
-                            <TouchableOpacity style={[styles.iconButton, isDarkMode && styles.darkIconButton]} onPress={() => toggleWishlist({ ...product, tags: [] })}>
+                            <TouchableOpacity style={[styles.iconButton, isDarkMode && styles.darkIconButton]} onPress={() => toggleWishlist({ ...product, tags: [] }, user?.uid)}>
                                 <Heart
                                     size={24}
                                     color={isLiked ? Colors.accent : (isDarkMode ? '#FFF' : Colors.text)}
