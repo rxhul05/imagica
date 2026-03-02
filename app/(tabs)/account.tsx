@@ -7,11 +7,9 @@ import { useAuthStore } from '../../store/authStore';
 import { useThemeStore } from '../../store/themeStore';
 
 export default function AccountScreen() {
-    const { user, signOut } = useAuthStore();
+    const { user, appUser, isAdmin, signOut } = useAuthStore();
     const { mode, setMode } = useThemeStore();
     const router = useRouter();
-
-    const isAdmin = user?.email === 'rutuja9619@gmail.com';
     const isDarkMode = mode === 'dark';
 
     const toggleTheme = () => {
@@ -82,7 +80,7 @@ export default function AccountScreen() {
                         )}
                     </View>
                     <View style={styles.profileInfo}>
-                        <Text style={[styles.profileName, isDarkMode && styles.darkText]}>{user?.email?.split('@')[0] || 'Guest User'}</Text>
+                        <Text style={[styles.profileName, isDarkMode && styles.darkText]}>{appUser?.full_name || user?.email?.split('@')[0] || 'Guest User'}</Text>
                         <Text style={[styles.profileAction, isDarkMode && styles.darkTextLight]}>{user ? 'Show profile' : 'Sign in to your account'}</Text>
                     </View>
                     <ChevronRight size={20} color={isDarkMode ? '#FFF' : Colors.textLight} />

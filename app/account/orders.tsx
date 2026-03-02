@@ -1,11 +1,10 @@
 import { useRouter } from 'expo-router';
-import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
 import { ArrowLeft, Package } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
-import { db } from '../../lib/firebase';
+import { getUserOrders } from '../../lib/db';
 import { useAuthStore } from '../../store/authStore';
 import { useThemeStore } from '../../store/themeStore';
 
@@ -25,16 +24,7 @@ export default function OrdersScreen() {
     const fetchOrders = async () => {
         if (!user) return;
         try {
-            const q = query(
-                collection(db, 'orders'),
-                where('user_id', '==', user.uid),
-                orderBy('created_at', 'desc')
-            );
-            const querySnapshot = await getDocs(q);
-            const data = querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-            }));
+            const data = await getUserOrders(user.uid);
             setOrders(data);
         } catch (error) {
             console.error('Error fetching orders:', error);
@@ -119,74 +109,28 @@ export default function OrdersScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: Colors.background,
-    },
-    darkContainer: {
-        backgroundColor: '#121212',
-    },
-    darkHeader: {
-        borderBottomColor: '#333333',
-    },
-    darkText: {
-        color: '#FFFFFF',
-    },
-    darkTextLight: {
-        color: '#AAAAAA',
-    },
-    darkCard: {
-        backgroundColor: '#1E1E1E',
-        borderColor: '#333333',
-    },
-    darkDivider: {
-        backgroundColor: '#333333',
-    },
-    center: {
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: 20,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.lightGray,
-    },
+    container: { flex: 1, backgroundColor: Colors.background },
+    darkContainer: { backgroundColor: '#121212' },
+    darkHeader: { borderBottomColor: '#333333' },
+    darkText: { color: '#FFFFFF' },
+    darkTextLight: { color: '#AAAAAA' },
+    darkCard: { backgroundColor: '#1E1E1E', borderColor: '#333333' },
+    darkDivider: { backgroundColor: '#333333' },
+    center: { justifyContent: 'center', alignItems: 'center' },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderBottomColor: Colors.lightGray },
     backButton: { padding: 4 },
     headerTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.text },
     list: { padding: 20 },
-    card: {
-        backgroundColor: Colors.surface,
-        borderRadius: 12,
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: Colors.lightGray,
-        padding: 16,
-    },
-    cardHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: 12,
-    },
+    card: { backgroundColor: Colors.surface, borderRadius: 12, marginBottom: 16, borderWidth: 1, borderColor: Colors.lightGray, padding: 16 },
+    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
     orderId: { fontSize: 16, fontWeight: 'bold', color: Colors.text },
     orderDate: { fontSize: 14, color: Colors.textLight, marginTop: 2 },
-    statusBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 4,
-    },
+    statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
     statusText: { fontSize: 12, fontWeight: '600' },
     divider: { height: 1, backgroundColor: Colors.lightGray, marginVertical: 12 },
     itemsList: { gap: 4 },
     itemText: { fontSize: 14, color: Colors.text },
-    cardFooter: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
+    cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     totalLabel: { fontSize: 14, color: Colors.textLight },
     totalAmount: { fontSize: 16, fontWeight: 'bold', color: Colors.primary },
     emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 100, gap: 16 },

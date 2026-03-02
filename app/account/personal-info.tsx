@@ -1,17 +1,16 @@
 import { useRouter } from 'expo-router';
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { ArrowLeft } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
-import { db } from '../../lib/firebase';
+import { getProfile, saveProfile } from '../../lib/db';
 import { useAuthStore } from '../../store/authStore';
 import { useThemeStore } from '../../store/themeStore';
 
 export default function PersonalInfoScreen() {
     const router = useRouter();
-    const { user } = useAuthStore();
+    const { user, refreshProfile } = useAuthStore();
     const { mode } = useThemeStore();
     const isDarkMode = mode === 'dark';
 
@@ -22,17 +21,14 @@ export default function PersonalInfoScreen() {
     const [initialLoading, setInitialLoading] = useState(true);
 
     useEffect(() => {
-        fetchProfile();
+        fetchProfileData();
     }, []);
 
-    const fetchProfile = async () => {
+    const fetchProfileData = async () => {
         if (!user) return;
         try {
-            const docRef = doc(db, 'profiles', user.uid);
-            const docSnap = await getDoc(docRef);
-
-            if (docSnap.exists()) {
-                const data = docSnap.data();
+            const data = await getProfile(user.uid);
+            if (data) {
                 setName(data.full_name || '');
                 setPhone(data.phone || '');
             }
@@ -45,23 +41,14 @@ export default function PersonalInfoScreen() {
 
     const handleSave = async () => {
         if (!user) return;
+        if (!name.trim()) {
+            Alert.alert('Validation Error', 'Name cannot be empty.');
+            return;
+        }
         setLoading(true);
         try {
-            const updates = {
-                full_name: name,
-                phone: phone,
-                updated_at: serverTimestamp(),
-            };
-
-            await setDoc(doc(db, 'profiles', user.uid), updates, { merge: true });
-
-            // Also update the users table
-            await setDoc(doc(db, 'users', user.uid), {
-                full_name: name,
-                phone: phone,
-                updated_at: serverTimestamp(),
-            }, { merge: true });
-
+            await saveProfile(user.uid, { full_name: name.trim(), phone: phone.trim() });
+            await refreshProfile(); // Refresh appUser in store so account screen shows updated name
             Alert.alert('Success', 'Personal information updated successfully!');
             router.back();
         } catch (error: any) {

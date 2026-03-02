@@ -1,11 +1,10 @@
 import { useRouter } from 'expo-router';
-import { addDoc, collection, deleteDoc, doc, getDocs, orderBy, query, serverTimestamp, where } from 'firebase/firestore';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
-import { db } from '../../lib/firebase';
+import { addAddress, deleteAddress, getUserAddresses } from '../../lib/db';
 import { useAuthStore } from '../../store/authStore';
 import { useThemeStore } from '../../store/themeStore';
 
@@ -27,6 +26,7 @@ export default function AddressesScreen() {
     const [newLabel, setNewLabel] = useState('');
     const [newAddress, setNewAddress] = useState('');
     const [saving, setSaving] = useState(false);
+    const [errors, setErrors] = useState<{ label?: string; address?: string }>({});
 
     useEffect(() => {
         fetchAddresses();
@@ -35,17 +35,8 @@ export default function AddressesScreen() {
     const fetchAddresses = async () => {
         if (!user) return;
         try {
-            const q = query(
-                collection(db, 'addresses'),
-                where('user_id', '==', user.uid),
-                orderBy('created_at', 'desc')
-            );
-            const querySnapshot = await getDocs(q);
-            const data = querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-            })) as Address[];
-            setAddresses(data);
+            const data = await getUserAddresses(user.uid);
+            setAddresses(data as Address[]);
         } catch (error) {
             console.error('Error fetching addresses:', error);
         } finally {
@@ -53,25 +44,26 @@ export default function AddressesScreen() {
         }
     };
 
+    const validateFields = (): boolean => {
+        const newErrors: { label?: string; address?: string } = {};
+        if (!newLabel.trim()) newErrors.label = 'Label is required';
+        if (!newAddress.trim()) newErrors.address = 'Address is required';
+        if (newAddress.trim().length < 10) newErrors.address = 'Please enter a complete address';
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
     const handleAddAddress = async () => {
-        if (!newLabel || !newAddress) {
-            Alert.alert('Error', 'Please fill in all fields');
-            return;
-        }
+        if (!validateFields()) return;
         if (!user) return;
 
         setSaving(true);
         try {
-            const docRef = await addDoc(collection(db, 'addresses'), {
-                user_id: user.uid,
-                label: newLabel,
-                full_address: newAddress,
-                created_at: serverTimestamp(),
-            });
-
-            setAddresses([{ id: docRef.id, label: newLabel, full_address: newAddress }, ...addresses]);
+            const docRef = await addAddress(user.uid, newLabel.trim(), newAddress.trim());
+            setAddresses([{ id: docRef.id, label: newLabel.trim(), full_address: newAddress.trim() }, ...addresses]);
             setNewLabel('');
             setNewAddress('');
+            setErrors({});
             setIsModalVisible(false);
         } catch (error: any) {
             Alert.alert('Error', error.message);
@@ -86,7 +78,7 @@ export default function AddressesScreen() {
             {
                 text: 'Delete', style: 'destructive', onPress: async () => {
                     try {
-                        await deleteDoc(doc(db, 'addresses', id));
+                        await deleteAddress(id);
                         setAddresses(addresses.filter(a => a.id !== id));
                     } catch (error: any) {
                         Alert.alert('Error', error.message);
@@ -140,23 +132,29 @@ export default function AddressesScreen() {
                 <View style={styles.modalContainer}>
                     <View style={[styles.modalContent, isDarkMode && styles.darkModalContent]}>
                         <Text style={[styles.modalTitle, isDarkMode && styles.darkText]}>Add New Address</Text>
-                        <TextInput
-                            style={[styles.input, isDarkMode && styles.darkInput]}
-                            placeholder="Label (e.g., Home)"
-                            value={newLabel}
-                            onChangeText={setNewLabel}
-                            placeholderTextColor={isDarkMode ? '#666' : '#999'}
-                        />
-                        <TextInput
-                            style={[styles.input, styles.textArea, isDarkMode && styles.darkInput]}
-                            placeholder="Full Address"
-                            value={newAddress}
-                            onChangeText={setNewAddress}
-                            multiline
-                            placeholderTextColor={isDarkMode ? '#666' : '#999'}
-                        />
+                        <View>
+                            <TextInput
+                                style={[styles.input, isDarkMode && styles.darkInput, errors.label && styles.inputError]}
+                                placeholder="Label (e.g., Home)"
+                                value={newLabel}
+                                onChangeText={(t) => { setNewLabel(t); setErrors(prev => ({ ...prev, label: undefined })); }}
+                                placeholderTextColor={isDarkMode ? '#666' : '#999'}
+                            />
+                            {errors.label && <Text style={styles.errorText}>{errors.label}</Text>}
+                        </View>
+                        <View>
+                            <TextInput
+                                style={[styles.input, styles.textArea, isDarkMode && styles.darkInput, errors.address && styles.inputError]}
+                                placeholder="Full Address"
+                                value={newAddress}
+                                onChangeText={(t) => { setNewAddress(t); setErrors(prev => ({ ...prev, address: undefined })); }}
+                                multiline
+                                placeholderTextColor={isDarkMode ? '#666' : '#999'}
+                            />
+                            {errors.address && <Text style={styles.errorText}>{errors.address}</Text>}
+                        </View>
                         <View style={styles.modalButtons}>
-                            <TouchableOpacity style={[styles.cancelButton, isDarkMode && styles.darkBorder]} onPress={() => setIsModalVisible(false)}>
+                            <TouchableOpacity style={[styles.cancelButton, isDarkMode && styles.darkBorder]} onPress={() => { setIsModalVisible(false); setErrors({}); }}>
                                 <Text style={[styles.buttonText, isDarkMode && styles.darkText]}>Cancel</Text>
                             </TouchableOpacity>
                             <TouchableOpacity style={styles.saveButton} onPress={handleAddAddress} disabled={saving}>
@@ -253,11 +251,20 @@ const styles = StyleSheet.create({
         borderColor: Colors.lightGray,
         borderRadius: 8,
         padding: 12,
-        marginBottom: 16,
+        marginBottom: 4,
         fontSize: 16,
     },
+    inputError: {
+        borderColor: '#D32F2F',
+    },
+    errorText: {
+        color: '#D32F2F',
+        fontSize: 12,
+        marginBottom: 12,
+        marginLeft: 4,
+    },
     textArea: { height: 80, textAlignVertical: 'top' },
-    modalButtons: { flexDirection: 'row', justifyContent: 'space-between', gap: 16 },
+    modalButtons: { flexDirection: 'row', justifyContent: 'space-between', gap: 16, marginTop: 12 },
     cancelButton: {
         flex: 1,
         padding: 16,

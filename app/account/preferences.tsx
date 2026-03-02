@@ -1,11 +1,10 @@
 import { useRouter } from 'expo-router';
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { ArrowLeft, Check } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
-import { db } from '../../lib/firebase';
+import { getPreferences, savePreferences } from '../../lib/db';
 import { useAuthStore } from '../../store/authStore';
 import { useThemeStore } from '../../store/themeStore';
 
@@ -32,17 +31,14 @@ export default function PreferencesScreen() {
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        fetchPreferences();
+        fetchPrefs();
     }, []);
 
-    const fetchPreferences = async () => {
+    const fetchPrefs = async () => {
         if (!user) return;
         try {
-            const docRef = doc(db, 'preferences', user.uid);
-            const docSnap = await getDoc(docRef);
-
-            if (docSnap.exists()) {
-                const data = docSnap.data();
+            const data = await getPreferences(user.uid);
+            if (data) {
                 setSelected({
                     skinType: data.skin_type || [],
                     skinConcerns: data.skin_concerns || [],
@@ -71,17 +67,12 @@ export default function PreferencesScreen() {
         if (!user) return;
         setSaving(true);
         try {
-            const updates = {
-                user_id: user.uid,
+            await savePreferences(user.uid, {
                 skin_type: selected.skinType,
                 skin_concerns: selected.skinConcerns,
                 hair_type: selected.hairType,
                 makeup_style: selected.makeupStyle,
-                updated_at: serverTimestamp(),
-            };
-
-            await setDoc(doc(db, 'preferences', user.uid), updates, { merge: true });
-
+            });
             Alert.alert('Success', 'Beauty preferences updated!');
             router.back();
         } catch (error: any) {
@@ -161,38 +152,14 @@ export default function PreferencesScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: Colors.background,
-    },
-    darkContainer: {
-        backgroundColor: '#121212',
-    },
-    darkHeader: {
-        borderBottomColor: '#333333',
-    },
-    darkText: {
-        color: '#FFFFFF',
-    },
-    darkTextLight: {
-        color: '#AAAAAA',
-    },
-    darkChip: {
-        backgroundColor: '#1E1E1E',
-        borderColor: '#333333',
-    },
-    center: {
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: 20,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.lightGray,
-    },
+    container: { flex: 1, backgroundColor: Colors.background },
+    darkContainer: { backgroundColor: '#121212' },
+    darkHeader: { borderBottomColor: '#333333' },
+    darkText: { color: '#FFFFFF' },
+    darkTextLight: { color: '#AAAAAA' },
+    darkChip: { backgroundColor: '#1E1E1E', borderColor: '#333333' },
+    center: { justifyContent: 'center', alignItems: 'center' },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderBottomColor: Colors.lightGray },
     backButton: { padding: 4 },
     headerTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.text },
     saveButton: { fontSize: 16, fontWeight: '600', color: Colors.primary },
@@ -201,20 +168,8 @@ const styles = StyleSheet.create({
     section: { marginBottom: 24 },
     sectionTitle: { fontSize: 16, fontWeight: 'bold', color: Colors.text, marginBottom: 12 },
     chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    chip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: Colors.lightGray,
-        backgroundColor: Colors.surface,
-    },
-    chipSelected: {
-        backgroundColor: Colors.primary,
-        borderColor: Colors.primary,
-    },
+    chip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: Colors.lightGray, backgroundColor: Colors.surface },
+    chipSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
     chipText: { fontSize: 14, color: Colors.text },
     chipTextSelected: { color: '#FFF', fontWeight: '600' },
 });

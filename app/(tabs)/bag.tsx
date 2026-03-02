@@ -1,12 +1,11 @@
 import { useRouter } from 'expo-router';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { CheckCircle, CreditCard, Minus, MoreHorizontal, Plus, Wallet } from 'lucide-react-native';
 import { useState } from 'react';
 import { Alert, FlatList, Image, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { ZoomIn, ZoomOut } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
-import { db } from '../../lib/firebase';
+import { createOrder } from '../../lib/db';
 import { useAuthStore } from '../../store/authStore';
 import { useCartStore } from '../../store/cartStore';
 import { useThemeStore } from '../../store/themeStore';
@@ -45,14 +44,12 @@ export default function BagScreen() {
         setShowPaymentModal(false);
 
         try {
-            await addDoc(collection(db, 'orders'), {
+            await createOrder({
                 user_id: user.uid,
-                user_email: user.email,
+                user_email: user.email || '',
                 items: JSON.stringify(items),
                 total_amount: total(),
-                status: 'processing',
                 payment_method: paymentMethod,
-                created_at: serverTimestamp(),
             });
 
             setShowSuccess(true);

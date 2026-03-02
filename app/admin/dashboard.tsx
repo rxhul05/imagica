@@ -1,11 +1,10 @@
 import { useRouter } from 'expo-router';
-import { collection, deleteDoc, doc, getDocs, orderBy, query, updateDoc } from 'firebase/firestore';
 import { ArrowLeft, DollarSign, ShoppingBag, Users } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
-import { db } from '../../lib/firebase';
+import { deleteUser as deleteUserDb, getAllOrders, getAllUsers, updateOrderStatus as updateOrderStatusDb } from '../../lib/db';
 
 import { useThemeStore } from '../../store/themeStore';
 
@@ -28,22 +27,10 @@ export default function AdminDashboard() {
     const fetchDashboardData = async () => {
         try {
             // Fetch Orders
-            const ordersQuery = query(
-                collection(db, 'orders'),
-                orderBy('created_at', 'desc')
-            );
-            const ordersSnapshot = await getDocs(ordersQuery);
-            const orders = ordersSnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-            }));
+            const orders = await getAllOrders();
 
-            // Fetch Users from the users collection
-            const usersSnapshot = await getDocs(collection(db, 'users'));
-            const users = usersSnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-            }));
+            // Fetch Users
+            const users = await getAllUsers();
 
             // Calculate Stats
             const totalRevenue = orders.reduce((sum, order: any) => sum + (order.total_amount || 0), 0);
@@ -105,9 +92,9 @@ export default function AdminDashboard() {
         return `${date.getDate().toString().padStart(2, '0')} ${months[date.getMonth()]} ${date.getFullYear()}`;
     };
 
-    const updateOrderStatus = async (orderId: string, newStatus: string) => {
+    const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
         try {
-            await updateDoc(doc(db, 'orders', orderId), { status: newStatus });
+            await updateOrderStatusDb(orderId, newStatus);
 
             // Update local state
             setRecentOrders(prev => prev.map(order =>
@@ -122,7 +109,7 @@ export default function AdminDashboard() {
         }
     };
 
-    const deleteUser = async (userId: string) => {
+    const handleDeleteUser = async (userId: string) => {
         Alert.alert(
             "Delete User",
             "Are you sure you want to delete this user's data? This action cannot be undone.",
@@ -133,11 +120,8 @@ export default function AdminDashboard() {
                     style: "destructive",
                     onPress: async () => {
                         try {
-                            // Delete user document from Firestore
-                            await deleteDoc(doc(db, 'users', userId));
-
-                            // Remove from local state
-                            setUsersList(prev => prev.filter(u => u.id !== userId));
+                            await deleteUserDb(userId);
+                            setUsersList(prev => prev.filter(u => u.uid !== userId));
                             setStats(prev => ({ ...prev, users: prev.users - 1 }));
                             Alert.alert("Success", "User data deleted successfully");
                         } catch (err: any) {
@@ -168,7 +152,7 @@ export default function AdminDashboard() {
                         </Text>
                     </View>
                 </View>
-                <TouchableOpacity onPress={() => deleteUser(item.id)} style={styles.deleteUserBtn}>
+                <TouchableOpacity onPress={() => handleDeleteUser(item.uid)} style={styles.deleteUserBtn}>
                     <Text style={styles.deleteUserText}>Delete</Text>
                 </TouchableOpacity>
             </View>
@@ -229,13 +213,13 @@ export default function AdminDashboard() {
                 <View style={styles.actionButtons}>
                     <TouchableOpacity
                         style={[styles.actionBtn, styles.cancelBtn]}
-                        onPress={() => updateOrderStatus(item.id, 'cancelled')}
+                        onPress={() => handleUpdateOrderStatus(item.id, 'cancelled')}
                     >
                         <Text style={[styles.actionBtnText, styles.cancelBtnText]}>Reject</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[styles.actionBtn, styles.deliverBtn]}
-                        onPress={() => updateOrderStatus(item.id, 'delivered')}
+                        onPress={() => handleUpdateOrderStatus(item.id, 'delivered')}
                     >
                         <Text style={styles.actionBtnText}>
                             Mark Delivered
@@ -374,7 +358,7 @@ export default function AdminDashboard() {
                             <FlatList
                                 data={usersList}
                                 renderItem={renderUser}
-                                keyExtractor={item => item.id}
+                                keyExtractor={item => item.uid}
                                 scrollEnabled={false}
                                 contentContainerStyle={styles.ordersList}
                             />
